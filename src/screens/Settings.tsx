@@ -1,7 +1,15 @@
 import { ArrowLeft, Check, Camera, Shield, Lock, ShieldCheck, Bell, Eye, Users, Ban, Palette, Sun, Moon, Settings as SettingsIcon, ChevronRight } from 'lucide-react';
-import { Screen } from '../App';
+import { Screen } from '../navigation/routes';
+import { useAuth } from '../auth/AuthContext';
 
 export default function Settings({ onNavigate }: { onNavigate: (s: Screen) => void }) {
+  const { logout } = useAuth();
+
+  const handleLogout = async () => {
+    await logout();
+    onNavigate('login');
+  };
+
   return (
     <div className="bg-background-light dark:bg-background-dark font-sans text-slate-900 dark:text-slate-100 transition-colors duration-200 min-h-screen">
       <div className="relative flex min-h-screen w-full flex-col overflow-x-hidden">
@@ -9,7 +17,7 @@ export default function Settings({ onNavigate }: { onNavigate: (s: Screen) => vo
           {/* Top Navigation Bar */}
           <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md px-6 py-4 lg:px-40">
             <div className="flex items-center gap-4">
-              <button 
+              <button
                 onClick={() => onNavigate('chat')}
                 className="flex items-center justify-center p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               >
@@ -17,7 +25,7 @@ export default function Settings({ onNavigate }: { onNavigate: (s: Screen) => vo
               </button>
               <h2 className="text-xl font-bold tracking-tight">Settings</h2>
             </div>
-            <button 
+            <button
               onClick={() => onNavigate('chat')}
               className="flex items-center justify-center rounded-xl h-10 bg-primary text-white gap-2 text-sm font-bold px-6 hover:bg-primary/90 transition-all shadow-md active:scale-95"
             >
@@ -31,8 +39,8 @@ export default function Settings({ onNavigate }: { onNavigate: (s: Screen) => vo
             <section className="mb-10">
               <div className="flex flex-col items-center gap-6 md:flex-row md:items-start md:gap-8">
                 <div className="relative group">
-                  <div 
-                    className="bg-center bg-no-repeat aspect-square bg-cover rounded-full h-32 w-32 border-4 border-white dark:border-slate-800 shadow-lg" 
+                  <div
+                    className="bg-center bg-no-repeat aspect-square bg-cover rounded-full h-32 w-32 border-4 border-white dark:border-slate-800 shadow-lg"
                     style={{ backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuCUXAfNgIBWnudDtLG4LD9ghQc5ozvvo4sJEb86Vlu3N2iHZvBfalKiwNhcupYyKDAo3E_MV90r2mXNT98Nd76wN6OH-F6ovD2yBCSRC-W46f6SFmKiTer0mewXvSQ6pKdq9LsQ4y9b4QWNJKbnkvNuGEObhXsiBvoZ2cH6SjtpJ5CGIwQuh-Las_OVCnkLVMW95PVnbJ-7mi4MJkSy1IGq9DTVZQrsm-Sm6BCb6Z3iovDzrR196eyEfGRdB02CTE4TZL3gscQT3w")' }}
                   ></div>
                   <button className="absolute bottom-0 right-0 bg-primary text-white p-2 rounded-full shadow-md hover:scale-105 transition-transform border-2 border-white dark:border-slate-800">
@@ -199,6 +207,14 @@ export default function Settings({ onNavigate }: { onNavigate: (s: Screen) => vo
             </div>
             <div className="mt-8 text-center text-slate-400 dark:text-slate-600 text-xs">
               Pure Chat App Version 2.4.0 • Built with Love
+            </div>
+            <div className="mt-4 flex justify-center">
+              <button
+                className="px-6 py-2 rounded-xl bg-slate-800 text-white font-bold text-sm hover:bg-slate-700 transition-colors"
+                onClick={handleLogout}
+              >
+                Logout
+              </button>
             </div>
           </footer>
         </div>
