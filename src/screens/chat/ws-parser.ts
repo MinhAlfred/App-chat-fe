@@ -107,6 +107,10 @@ export const parseWsEvent = (event: RawWsEvent): ParsedWsEvent => {
 
     const payload = resolveEventPayload(event);
 
+    console.log('[WS][Parser] raw event:', event);
+    console.log('[WS][Parser] eventType:', eventType);
+    console.log('[WS][Parser] payload:', payload);
+
     const isIncomingMessage =
         eventType === 'MESSAGE_SENT' ||
         eventType === 'MESSAGE_FORWARDED' ||
@@ -114,6 +118,12 @@ export const parseWsEvent = (event: RawWsEvent): ParsedWsEvent => {
 
     if (isIncomingMessage) {
         if (typeof payload.id !== 'string' || typeof payload.roomId !== 'string') return null;
+        // Normalize occurredAt (forwarded messages) → createdAt
+        if (!payload.createdAt && payload.occurredAt) {
+            console.log('[WS][Parser] normalizing occurredAt →', payload.occurredAt);
+            payload.createdAt = payload.occurredAt;
+        }
+        console.log('[WS][Parser] parsed message payload:', payload);
         return { eventType: 'MESSAGE_SENT', message: payload as unknown as MessageResponse };
     }
 

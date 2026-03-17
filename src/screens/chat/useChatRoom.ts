@@ -34,6 +34,8 @@ export type UseChatRoomReturn = {
     myUserId: string | null;
     onlineUserIds: ReadonlySet<string>;
     messageListRef: React.RefObject<HTMLElement | null>;
+    replyTo: MessageResponse | null;
+    setReplyTo: (msg: MessageResponse | null) => void;
     setSearchKeyword: (v: string) => void;
     setMessageInput: (v: string) => void;
     handleSelectRoom: (room: RoomResponse) => Promise<void>;
@@ -57,6 +59,7 @@ export const useChatRoom = (): UseChatRoomReturn => {
     const [isLoadingMessages, setIsLoadingMessages] = useState(false);
     const [isSending, setIsSending] = useState(false);
     const [errorMessage, setErrorMessage] = useState('');
+    const [replyTo, setReplyTo] = useState<MessageResponse | null>(null);
     const [myUserId, setMyUserId] = useState<string | null>(null);
     const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
 
@@ -166,9 +169,10 @@ export const useChatRoom = (): UseChatRoomReturn => {
         setIsSending(true);
         setErrorMessage('');
         try {
-            const created = await sendTextMessage(selectedRoom.id, messageInput.trim());
+            const created = await sendTextMessage(selectedRoom.id, messageInput.trim(), replyTo?.id);
             setMessages((prev) => [...prev, created]);
             setMessageInput('');
+            setReplyTo(null);
             setRooms((prev) =>
                 prev.map((r) =>
                     r.id === selectedRoom.id
@@ -190,8 +194,19 @@ export const useChatRoom = (): UseChatRoomReturn => {
             getConversationList(undefined, 20)
                 .then((r) => {
                     if (!r.data) return;
-                    setRooms(r.data);
-                    const updated = r.data.find((room) => room.id === selectedRoomRef.current?.id);
+                    const fetched = r.data;
+                    const fetchedMap = new Map(fetched.map((room) => [room.id, room]));
+
+                    // Merge: update rooms that exist in the fetch, keep rooms that don't
+                    // (avoids rooms disappearing due to pagination when refreshing)
+                    setRooms((prev) => {
+                        const merged = prev.map((room) => fetchedMap.get(room.id) ?? room);
+                        const existingIds = new Set(prev.map((r) => r.id));
+                        const added = fetched.filter((room) => !existingIds.has(room.id));
+                        return [...merged, ...added];
+                    });
+
+                    const updated = fetchedMap.get(selectedRoomRef.current?.id ?? '');
                     if (updated) setSelectedRoom(updated);
                 })
                 .catch(() => undefined),
@@ -238,8 +253,8 @@ export const useChatRoom = (): UseChatRoomReturn => {
                             r.id === message.roomId
                                 ? {
                                       ...r,
-                                      lastMessage: message.content,
-                                      lastMessageAt: message.createdAt,
+                                      lastMessage: message.content ?? r.lastMessage,
+                                      lastMessageAt: message.createdAt ?? (message as unknown as Record<string, string>).occurredAt ?? r.lastMessageAt,
                                       unreadCount: isActiveRoom ? 0 : r.unreadCount + 1,
                                   }
                                 : r,
@@ -480,6 +495,8 @@ export const useChatRoom = (): UseChatRoomReturn => {
         messageListRef,
         setSearchKeyword,
         setMessageInput,
+        replyTo,
+        setReplyTo,
         handleSelectRoom,
         handleSendMessage,
         handleRoomLeft,

@@ -26,6 +26,8 @@ export default function Chat({ onNavigate }: { onNavigate: (s: Screen) => void }
         messageListRef,
         setSearchKeyword,
         setMessageInput,
+        replyTo,
+        setReplyTo,
         handleSelectRoom,
         handleSendMessage,
         handleRoomLeft,
@@ -61,6 +63,7 @@ export default function Chat({ onNavigate }: { onNavigate: (s: Screen) => void }
                     myUserId={myUserId}
                     onlineUserIds={onlineUserIds}
                     listRef={messageListRef}
+                    onReply={setReplyTo}
                 />
                 <MessageInput
                     value={messageInput}
@@ -69,6 +72,8 @@ export default function Chat({ onNavigate }: { onNavigate: (s: Screen) => void }
                     disabled={!selectedRoom}
                     isSending={isSending}
                     errorMessage={errorMessage}
+                    replyTo={replyTo}
+                    onCancelReply={() => setReplyTo(null)}
                 />
             </main>
             {isInfoOpen && selectedRoom && (

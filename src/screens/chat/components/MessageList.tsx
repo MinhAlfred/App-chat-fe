@@ -106,9 +106,10 @@ type Props = {
     myUserId: string | null;
     onlineUserIds: ReadonlySet<string>;
     listRef: RefObject<HTMLElement | null>;
+    onReply: (message: MessageResponse) => void;
 };
 
-export default function MessageList({ messages, rooms, isLoading, hasRoom, myUserId, onlineUserIds, listRef }: Props) {
+export default function MessageList({ messages, rooms, isLoading, hasRoom, myUserId, onlineUserIds, listRef, onReply }: Props) {
     const [forwardingMessage, setForwardingMessage] = useState<MessageResponse | null>(null);
 
     return (
@@ -141,6 +142,7 @@ export default function MessageList({ messages, rooms, isLoading, hasRoom, myUse
                             isMine={isMine}
                             isSenderOnline={isMine || onlineUserIds.has(message.senderId)}
                             onForward={setForwardingMessage}
+                            onReply={onReply}
                         />
                     );
                 })}

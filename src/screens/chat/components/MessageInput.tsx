@@ -1,5 +1,6 @@
 import { FormEvent } from 'react';
-import { Paperclip, Send, Smile } from 'lucide-react';
+import { Paperclip, Send, Smile, X } from 'lucide-react';
+import { MessageResponse } from '../../../types/message';
 
 type Props = {
     value: string;
@@ -8,12 +9,29 @@ type Props = {
     disabled: boolean;
     isSending: boolean;
     errorMessage: string;
+    replyTo?: MessageResponse | null;
+    onCancelReply?: () => void;
 };
 
-export default function MessageInput({ value, onChange, onSubmit, disabled, isSending, errorMessage }: Props) {
+export default function MessageInput({ value, onChange, onSubmit, disabled, isSending, errorMessage, replyTo, onCancelReply }: Props) {
     return (
-        <footer className="p-6 bg-white border-t border-slate-100">
+        <footer className="px-6 pt-3 pb-6 bg-white border-t border-slate-100">
             {errorMessage && <p className="text-sm text-red-500 mb-2">{errorMessage}</p>}
+            {replyTo && (
+                <div className="flex items-center gap-2 mb-2 px-3 py-2 bg-slate-50 rounded-xl border-l-2 border-blue-500">
+                    <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-blue-600">{replyTo.senderName}</p>
+                        <p className="text-xs text-slate-500 truncate">{replyTo.content}</p>
+                    </div>
+                    <button
+                        className="p-1 rounded-full hover:bg-slate-200 text-slate-400 transition-colors flex-shrink-0"
+                        onClick={onCancelReply}
+                        type="button"
+                    >
+                        <X className="h-3.5 w-3.5" />
+                    </button>
+                </div>
+            )}
             <form
                 className="flex items-center gap-4 bg-slate-100/80 p-2 pl-4 rounded-4xl focus-within:bg-slate-100 transition-colors"
                 onSubmit={onSubmit}
