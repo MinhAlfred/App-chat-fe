@@ -11,6 +11,7 @@ export default function Chat({ onNavigate }: { onNavigate: (s: Screen) => void }
     const [isInfoOpen, setIsInfoOpen] = useState(false);
 
     const {
+        rooms,
         selectedRoom,
         filteredRooms,
         sortedMessages,
@@ -54,6 +55,7 @@ export default function Chat({ onNavigate }: { onNavigate: (s: Screen) => void }
                 />
                 <MessageList
                     messages={sortedMessages}
+                    rooms={rooms}
                     isLoading={isLoadingMessages}
                     hasRoom={selectedRoom !== null}
                     myUserId={myUserId}
