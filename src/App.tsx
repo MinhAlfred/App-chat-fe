@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import Login from './screens/Login';
-import Chat from './screens/Chat';
+import Chat from './screens/chat/index';
 import Settings from './screens/Settings';
 import Contacts from './screens/Contacts';
 import CreateGroup from './screens/CreateGroup';
