@@ -17,7 +17,7 @@ export default function Avatar({ name, online, size = 'md', className = '' }: Pr
     const { container, dot } = sizeMap[size];
 
     return (
-        <div className={`relative flex-shrink-0 ${className}`}>
+        <div className={`relative shrink-0 ${className}`}>
             <div
                 className={`${container} rounded-full bg-slate-200 text-slate-600 font-bold flex items-center justify-center`}
             >

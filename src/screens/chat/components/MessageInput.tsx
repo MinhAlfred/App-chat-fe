@@ -15,7 +15,7 @@ export default function MessageInput({ value, onChange, onSubmit, disabled, isSe
         <footer className="p-6 bg-white border-t border-slate-100">
             {errorMessage && <p className="text-sm text-red-500 mb-2">{errorMessage}</p>}
             <form
-                className="flex items-center gap-4 bg-slate-100/80 p-2 pl-4 rounded-[2rem] focus-within:bg-slate-100 transition-colors"
+                className="flex items-center gap-4 bg-slate-100/80 p-2 pl-4 rounded-4xl focus-within:bg-slate-100 transition-colors"
                 onSubmit={onSubmit}
             >
                 <button
