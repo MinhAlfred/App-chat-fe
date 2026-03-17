@@ -22,6 +22,7 @@ export type CreateGroupRoomRequest = {
     name: string;
     memberIds: string[];
     avatar?: string;
+    
 };
 
 export type UpdateRoomRequest = {

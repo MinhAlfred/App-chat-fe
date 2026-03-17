@@ -65,11 +65,17 @@ export const useChatRoom = (): UseChatRoomReturn => {
     const subscribedRoomIdsRef = useRef<Set<string>>(new Set());
     // always holds the latest selectedRoom without causing subscription re-runs
     const selectedRoomRef = useRef<RoomResponse | null>(null);
+    // mirrors rooms IDs so WS handlers can read without capturing stale state
+    const roomIdsRef = useRef<Set<string>>(new Set());
 
-    // Keep ref in sync with state
+    // Keep refs in sync with state
     useEffect(() => {
         selectedRoomRef.current = selectedRoom;
     }, [selectedRoom]);
+
+    useEffect(() => {
+        roomIdsRef.current = new Set(rooms.map((r) => r.id));
+    }, [rooms]);
 
     useEffect(() => {
         getMe()
@@ -195,7 +201,13 @@ export const useChatRoom = (): UseChatRoomReturn => {
 
                     const isActiveRoom = message.roomId === selectedRoomRef.current?.id;
 
-                    // 2. Cập nhật tin nhắn nếu đang ở đúng phòng
+                    // Room unknown → fetch updated list (side-effect outside updater)
+                    if (!roomIdsRef.current.has(message.roomId)) {
+                        log('Unknown room, refreshing list', message.roomId);
+                        void refreshRooms();
+                        return;
+                    }
+
                     if (isActiveRoom) {
                         setMessages((prev) => {
                             const idx = prev.findIndex((m) => m.id === message.id);
@@ -208,29 +220,18 @@ export const useChatRoom = (): UseChatRoomReturn => {
                         });
                     }
 
-                    // 3. Cập nhật danh sách phòng (Xử lý unread và room mới)
-                    setRooms((prev) => {
-                        const roomExists = prev.some(r => r.id === message.roomId);
-
-                        // Nếu phòng chưa có trong danh sách (người mới nhắn hoặc phòng mới tạo)
-                        if (!roomExists) {
-                            log('Room not found in list, refreshing...');
-                            refreshRooms(); // Gọi API tải lại danh sách
-                            return prev; // Tạm thời trả về danh sách cũ, refreshRooms sẽ cập nhật lại sau
-                        }
-
-                        // Nếu phòng đã có, cập nhật lastMessage và unreadCount như cũ
-                        return prev.map((r) =>
+                    setRooms((prev) =>
+                        prev.map((r) =>
                             r.id === message.roomId
                                 ? {
-                                    ...r,
-                                    lastMessage: message.content,
-                                    lastMessageAt: message.createdAt,
-                                    unreadCount: isActiveRoom ? 0 : r.unreadCount + 1,
-                                }
-                                : r
-                        );
-                    });
+                                      ...r,
+                                      lastMessage: message.content,
+                                      lastMessageAt: message.createdAt,
+                                      unreadCount: isActiveRoom ? 0 : r.unreadCount + 1,
+                                  }
+                                : r,
+                        ),
+                    );
                     return;
                 }
                 case 'MESSAGE_EDITED': {
@@ -288,9 +289,10 @@ export const useChatRoom = (): UseChatRoomReturn => {
     const handleRoomEvent = useCallback(
         (event: RawWsEvent) => {
             log('Room event', event);
+            const ev = event as Record<string, unknown>;
             const deletedId =
-                event.type === 'ROOM_DELETED' && typeof (event as Record<string, unknown>).roomId === 'string'
-                    ? ((event as Record<string, unknown>).roomId as string)
+                (ev.eventType === 'ROOM_DELETED' || ev.type === 'ROOM_DELETED') && typeof ev.roomId === 'string'
+                    ? (ev.roomId as string)
                     : null;
 
             if (deletedId) {
@@ -321,6 +323,11 @@ export const useChatRoom = (): UseChatRoomReturn => {
             token,
             userId: myUserId,
             debug: WS_DEBUG,
+            // Real-time new-room detection (requires BE to push to /topic/user/{id}/rooms)
+            onUserRoomEvent: (event) => {
+                log('User room event', event);
+                void refreshRooms();
+            },
             onError: (msg) => {
                 log('Error', msg);
                 setErrorMessage(msg);
@@ -367,6 +374,15 @@ export const useChatRoom = (): UseChatRoomReturn => {
             }
         });
     }, [rooms, connectionKey, handleWsEvent, handleMemberEvent, handleRoomEvent]);
+
+    // ─── Effect 3: Polling fallback for new room discovery ─────────────────
+    // Catches rooms created by others when user-level WS push is unavailable
+
+    useEffect(() => {
+        const POLL_INTERVAL = 30_000;
+        const timer = window.setInterval(() => void refreshRooms(), POLL_INTERVAL);
+        return () => window.clearInterval(timer);
+    }, [refreshRooms]);
 
     // ─── Derived state ──────────────────────────────────────────────────────
 

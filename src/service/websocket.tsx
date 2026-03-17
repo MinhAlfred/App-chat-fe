@@ -20,6 +20,8 @@ export type SetupChatOptions = {
     userId?: string;
     presenceUserId?: string;
     onPresenceEvent?: (event: RawWsEvent) => void;
+    /** Receives ROOM_CREATED / ROOM_UPDATED events pushed to the current user */
+    onUserRoomEvent?: (event: RawWsEvent) => void;
     onError?: (message: string) => void;
     wsUrl?: string;
     debug?: boolean;
@@ -57,6 +59,7 @@ export const setupChat = ({
     userId,
     presenceUserId,
     onPresenceEvent,
+    onUserRoomEvent,
     onError,
     wsUrl = 'http://localhost:3000/ws',
     debug = false,
@@ -120,6 +123,13 @@ export const setupChat = ({
             if (onPresenceEvent && presenceUserId) {
                 stompClient.subscribe(`/topic/presence/${presenceUserId}`, (msg) =>
                     onPresenceEvent(parsePayload(msg.body)),
+                );
+            }
+
+            // User-level room events: new room created, room updated, added to a room
+            if (onUserRoomEvent && userId) {
+                stompClient.subscribe(`/topic/user/${userId}/rooms`, (msg) =>
+                    onUserRoomEvent(parsePayload(msg.body)),
                 );
             }
 

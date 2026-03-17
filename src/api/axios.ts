@@ -6,8 +6,15 @@ type RetryableRequestConfig = InternalAxiosRequestConfig & {
     _retry?: boolean;
 };
 
+type ErrorResponsePayload = {
+    message?: string;
+};
+
 const getBaseUrl = () => import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
 const getRefreshPath = () => import.meta.env.VITE_AUTH_REFRESH_PATH || '/users/auth/refresh';
+const getLoginPath = () => import.meta.env.VITE_AUTH_LOGIN_PATH || '/users/auth/login';
+const getRegisterPath = () => import.meta.env.VITE_AUTH_REGISTER_PATH || '/users/auth/register';
+const getGoogleLoginPath = () => import.meta.env.VITE_AUTH_GOOGLE_LOGIN_PATH || '/users/auth/google';
 
 const axiosClient = axios.create({
     baseURL: getBaseUrl(),
@@ -27,6 +34,22 @@ const processRefreshQueue = (token: string | null) => {
 
 const queueRefreshSubscriber = (callback: (token: string | null) => void) => {
     refreshQueue.push(callback);
+};
+
+const normalizeApiError = (error: AxiosError) => {
+    const responseData = error.response?.data as ErrorResponsePayload | undefined;
+    const backendMessage = responseData?.message;
+
+    if (backendMessage) {
+        return new Error(backendMessage);
+    }
+
+    return error;
+};
+
+const isAuthEndpoint = (url: string) => {
+    const authPaths = [getLoginPath(), getRegisterPath(), getGoogleLoginPath(), getRefreshPath()];
+    return authPaths.some((path) => url.includes(path));
 };
 
 const performRefresh = async () => {
@@ -69,15 +92,16 @@ axiosClient.interceptors.response.use(
     async (error: AxiosError) => {
         const originalRequest = error.config as RetryableRequestConfig | undefined;
         if (!originalRequest) {
-            return Promise.reject(error);
+            return Promise.reject(normalizeApiError(error));
         }
 
         const status = error.response?.status;
         const requestUrl = originalRequest.url || '';
-        const isRefreshRequest = requestUrl.includes(getRefreshPath());
+        const isAuthRequest = isAuthEndpoint(requestUrl);
+        const hasAccessToken = Boolean(getAccessToken());
 
-        if (status !== 401 || originalRequest._retry || isRefreshRequest) {
-            return Promise.reject(error);
+        if (status !== 401 || originalRequest._retry || isAuthRequest || !hasAccessToken) {
+            return Promise.reject(normalizeApiError(error));
         }
 
         originalRequest._retry = true;
@@ -86,7 +110,7 @@ axiosClient.interceptors.response.use(
             return new Promise((resolve, reject) => {
                 queueRefreshSubscriber((newToken) => {
                     if (!newToken) {
-                        reject(error);
+                        reject(normalizeApiError(error));
                         return;
                     }
 
@@ -104,7 +128,7 @@ axiosClient.interceptors.response.use(
 
             if (!newAccessToken) {
                 clearTokens();
-                return Promise.reject(error);
+                return Promise.reject(normalizeApiError(error));
             }
 
             originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
@@ -112,6 +136,10 @@ axiosClient.interceptors.response.use(
         } catch (refreshError) {
             processRefreshQueue(null);
             clearTokens();
+            if (axios.isAxiosError(refreshError)) {
+                return Promise.reject(normalizeApiError(refreshError));
+            }
+
             return Promise.reject(refreshError);
         } finally {
             isRefreshing = false;
