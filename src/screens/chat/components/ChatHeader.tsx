@@ -3,9 +3,10 @@ import { RoomResponse } from '../../../types/room';
 
 type Props = {
     room: RoomResponse | null;
+    onToggleInfo?: () => void;
 };
 
-export default function ChatHeader({ room }: Props) {
+export default function ChatHeader({ room, onToggleInfo }: Props) {
     return (
         <header className="h-20 px-6 border-b border-slate-100 flex items-center justify-between glass-effect sticky top-0 z-10">
             <div className="flex items-center gap-4 min-w-0">
@@ -38,8 +39,9 @@ export default function ChatHeader({ room }: Props) {
                 </button>
                 <button
                     className="p-2.5 text-slate-500 hover:bg-slate-50 rounded-xl transition-all"
-                    title="More Options"
+                    title="Room Info"
                     type="button"
+                    onClick={onToggleInfo}
                 >
                     <MoreVertical className="h-5 w-5" />
                 </button>

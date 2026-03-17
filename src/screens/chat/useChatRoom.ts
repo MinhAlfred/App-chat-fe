@@ -38,6 +38,10 @@ export type UseChatRoomReturn = {
     setMessageInput: (v: string) => void;
     handleSelectRoom: (room: RoomResponse) => Promise<void>;
     handleSendMessage: (e: FormEvent) => Promise<void>;
+    handleRoomLeft: (roomId: string) => void;
+    handleRoomDeleted: (roomId: string) => void;
+    handleRoomInfoUpdated: (room: RoomResponse) => void;
+    memberVersion: number;
 };
 
 export const useChatRoom = (): UseChatRoomReturn => {
@@ -58,6 +62,8 @@ export const useChatRoom = (): UseChatRoomReturn => {
 
     // connectionKey increments when STOMP reconnects → triggers room subscription effect
     const [connectionKey, setConnectionKey] = useState(0);
+    // increments on every member event → tells RoomInfoPanel to re-fetch its member list
+    const [memberVersion, setMemberVersion] = useState(0);
 
     const messageListRef = useRef<HTMLElement | null>(null);
     const connectionRef = useRef<ChatConnection | null>(null);
@@ -67,6 +73,8 @@ export const useChatRoom = (): UseChatRoomReturn => {
     const selectedRoomRef = useRef<RoomResponse | null>(null);
     // mirrors rooms IDs so WS handlers can read without capturing stale state
     const roomIdsRef = useRef<Set<string>>(new Set());
+    // always-current handler for user-level room events (avoids stale closure in Effect 1)
+    const userRoomEventHandlerRef = useRef<(event: RawWsEvent) => void>(() => undefined);
 
     // Keep refs in sync with state
     useEffect(() => {
@@ -180,7 +188,12 @@ export const useChatRoom = (): UseChatRoomReturn => {
     const refreshRooms = useCallback(
         () =>
             getConversationList(undefined, 20)
-                .then((r) => r.data && setRooms(r.data))
+                .then((r) => {
+                    if (!r.data) return;
+                    setRooms(r.data);
+                    const updated = r.data.find((room) => room.id === selectedRoomRef.current?.id);
+                    if (updated) setSelectedRoom(updated);
+                })
                 .catch(() => undefined),
         [],
     );
@@ -282,6 +295,7 @@ export const useChatRoom = (): UseChatRoomReturn => {
         (event: RawWsEvent) => {
             log('Member event', event);
             void refreshRooms();
+            setMemberVersion((v) => v + 1);
         },
         [refreshRooms],
     );
@@ -323,11 +337,7 @@ export const useChatRoom = (): UseChatRoomReturn => {
             token,
             userId: myUserId,
             debug: WS_DEBUG,
-            // Real-time new-room detection (requires BE to push to /topic/user/{id}/rooms)
-            onUserRoomEvent: (event) => {
-                log('User room event', event);
-                void refreshRooms();
-            },
+            onUserRoomEvent: (event) => userRoomEventHandlerRef.current(event),
             onError: (msg) => {
                 log('Error', msg);
                 setErrorMessage(msg);
@@ -384,6 +394,52 @@ export const useChatRoom = (): UseChatRoomReturn => {
         return () => window.clearInterval(timer);
     }, [refreshRooms]);
 
+    // ─── Room management callbacks ──────────────────────────────────────────
+
+    const handleRoomLeft = useCallback((roomId: string) => {
+        setRooms((prev) => prev.filter((r) => r.id !== roomId));
+        if (selectedRoomRef.current?.id === roomId) {
+            setSelectedRoom(null);
+            setMessages([]);
+        }
+    }, []);
+
+    const handleRoomDeleted = useCallback((roomId: string) => {
+        setRooms((prev) => prev.filter((r) => r.id !== roomId));
+        if (selectedRoomRef.current?.id === roomId) {
+            setSelectedRoom(null);
+            setMessages([]);
+        }
+    }, []);
+
+    const handleRoomInfoUpdated = useCallback((room: RoomResponse) => {
+        setRooms((prev) => prev.map((r) => (r.id === room.id ? { ...r, ...room } : r)));
+        if (selectedRoomRef.current?.id === room.id) {
+            setSelectedRoom((prev) => (prev ? { ...prev, ...room } : prev));
+        }
+    }, []);
+
+    // Keep the user-room event handler ref current so Effect 1 never needs to re-run
+    userRoomEventHandlerRef.current = (event: RawWsEvent) => {
+        const ev = event as Record<string, unknown>;
+        const eventType = ev.eventType as string | undefined;
+        const roomId = ev.roomId as string | undefined;
+        log('User room event', eventType, roomId);
+
+        switch (eventType) {
+            case 'MEMBER_REMOVED':
+            case 'MEMBER_LEFT':
+                // Current user was kicked or left — remove room from list
+                if (roomId) handleRoomLeft(roomId);
+                return;
+            case 'ROOM_CREATED':
+            case 'MEMBER_ADDED':
+            default:
+                // New room or added to existing room — refresh list
+                void refreshRooms();
+        }
+    };
+
     // ─── Derived state ──────────────────────────────────────────────────────
 
     const filteredRooms = useMemo(() => {
@@ -426,5 +482,9 @@ export const useChatRoom = (): UseChatRoomReturn => {
         setMessageInput,
         handleSelectRoom,
         handleSendMessage,
+        handleRoomLeft,
+        handleRoomDeleted,
+        handleRoomInfoUpdated,
+        memberVersion,
     };
 };

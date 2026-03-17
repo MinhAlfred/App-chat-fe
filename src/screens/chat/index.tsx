@@ -1,11 +1,15 @@
+import { useState } from 'react';
 import { Screen } from '../../navigation/routes';
 import { useChatRoom } from './useChatRoom';
 import Sidebar from './components/Sidebar';
 import ChatHeader from './components/ChatHeader';
 import MessageList from './components/MessageList';
 import MessageInput from './components/MessageInput';
+import RoomInfoPanel from './components/RoomInfoPanel';
 
 export default function Chat({ onNavigate }: { onNavigate: (s: Screen) => void }) {
+    const [isInfoOpen, setIsInfoOpen] = useState(false);
+
     const {
         selectedRoom,
         filteredRooms,
@@ -23,6 +27,10 @@ export default function Chat({ onNavigate }: { onNavigate: (s: Screen) => void }
         setMessageInput,
         handleSelectRoom,
         handleSendMessage,
+        handleRoomLeft,
+        handleRoomDeleted,
+        handleRoomInfoUpdated,
+        memberVersion,
     } = useChatRoom();
 
     return (
@@ -33,11 +41,17 @@ export default function Chat({ onNavigate }: { onNavigate: (s: Screen) => void }
                 isLoadingRooms={isLoadingRooms}
                 searchKeyword={searchKeyword}
                 onSearchChange={setSearchKeyword}
-                onSelectRoom={(room) => void handleSelectRoom(room)}
+                onSelectRoom={(room) => {
+                    setIsInfoOpen(false);
+                    void handleSelectRoom(room);
+                }}
                 onNavigate={onNavigate}
             />
             <main className="flex-1 flex flex-col min-w-0 bg-white">
-                <ChatHeader room={selectedRoom} />
+                <ChatHeader
+                    room={selectedRoom}
+                    onToggleInfo={selectedRoom ? () => setIsInfoOpen((v) => !v) : undefined}
+                />
                 <MessageList
                     messages={sortedMessages}
                     isLoading={isLoadingMessages}
@@ -55,6 +69,18 @@ export default function Chat({ onNavigate }: { onNavigate: (s: Screen) => void }
                     errorMessage={errorMessage}
                 />
             </main>
+            {isInfoOpen && selectedRoom && (
+                <RoomInfoPanel
+                    room={selectedRoom}
+                    myUserId={myUserId}
+                    onlineUserIds={onlineUserIds}
+                    onClose={() => setIsInfoOpen(false)}
+                    onRoomLeft={handleRoomLeft}
+                    onRoomDeleted={handleRoomDeleted}
+                    onRoomUpdated={handleRoomInfoUpdated}
+                    memberVersion={memberVersion}
+                />
+            )}
         </div>
     );
 }
