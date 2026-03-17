@@ -22,12 +22,13 @@ const formatTime = (value?: string) => {
         return '--:--';
     }
 
-    return new Intl.DateTimeFormat('vi-VN', {
+    return new Intl.DateTimeFormat('en-GB', {
         weekday: 'short',
         day: '2-digit',
         month: '2-digit',
         hour: '2-digit',
         minute: '2-digit',
+        hour12: false,
     }).format(date);
 };
 
