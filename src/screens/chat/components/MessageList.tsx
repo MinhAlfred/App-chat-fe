@@ -1,4 +1,4 @@
-import { RefObject, useState } from 'react';
+import { RefObject, useState, useCallback } from 'react';
 import { Search } from 'lucide-react';
 import { MessageResponse } from '../../../types/message';
 import { RoomResponse } from '../../../types/room';
@@ -103,18 +103,30 @@ type Props = {
     rooms: RoomResponse[];
     isLoading: boolean;
     hasRoom: boolean;
+    hasMore: boolean;
+    isLoadingMore: boolean;
     myUserId: string | null;
     onlineUserIds: ReadonlySet<string>;
     listRef: RefObject<HTMLElement | null>;
     onReply: (message: MessageResponse) => void;
+    onLoadMore: () => void;
 };
 
-export default function MessageList({ messages, rooms, isLoading, hasRoom, myUserId, onlineUserIds, listRef, onReply }: Props) {
+export default function MessageList({ messages, rooms, isLoading, hasRoom, hasMore, isLoadingMore, myUserId, onlineUserIds, listRef, onReply, onLoadMore }: Props) {
     const [forwardingMessage, setForwardingMessage] = useState<MessageResponse | null>(null);
+
+    const handleScroll = useCallback((e: React.UIEvent<HTMLElement>) => {
+        if (e.currentTarget.scrollTop === 0 && hasMore && !isLoadingMore) {
+            onLoadMore();
+        }
+    }, [hasMore, isLoadingMore, onLoadMore]);
 
     return (
         <>
-            <section ref={listRef} className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/50 no-scrollbar">
+            <section ref={listRef} onScroll={handleScroll} className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/50 no-scrollbar">
+                {isLoadingMore && (
+                    <p className="text-center text-xs text-slate-400 py-2">Đang tải thêm...</p>
+                )}
                 {isLoading && <p className="text-sm text-slate-500">Loading messages...</p>}
                 {!isLoading && !hasRoom && (
                     <p className="text-sm text-slate-500">Chọn cuộc trò chuyện để bắt đầu.</p>

@@ -29,6 +29,8 @@ export type UseChatRoomReturn = {
     messageInput: string;
     isLoadingRooms: boolean;
     isLoadingMessages: boolean;
+    isLoadingMoreMessages: boolean;
+    hasMoreMessages: boolean;
     isSending: boolean;
     errorMessage: string;
     myUserId: string | null;
@@ -40,6 +42,7 @@ export type UseChatRoomReturn = {
     setMessageInput: (v: string) => void;
     handleSelectRoom: (room: RoomResponse) => Promise<void>;
     handleSendMessage: (e: FormEvent) => Promise<void>;
+    handleLoadMoreMessages: () => Promise<void>;
     handleRoomLeft: (roomId: string) => void;
     handleRoomDeleted: (roomId: string) => void;
     handleRoomInfoUpdated: (room: RoomResponse) => void;
@@ -53,6 +56,9 @@ export const useChatRoom = (): UseChatRoomReturn => {
     const [rooms, setRooms] = useState<RoomResponse[]>([]);
     const [selectedRoom, setSelectedRoom] = useState<RoomResponse | null>(null);
     const [messages, setMessages] = useState<MessageResponse[]>([]);
+    const [messageCursor, setMessageCursor] = useState<string | null>(null);
+    const [hasMoreMessages, setHasMoreMessages] = useState(false);
+    const [isLoadingMoreMessages, setIsLoadingMoreMessages] = useState(false);
     const [searchKeyword, setSearchKeyword] = useState('');
     const [messageInput, setMessageInput] = useState('');
     const [isLoadingRooms, setIsLoadingRooms] = useState(true);
@@ -69,6 +75,9 @@ export const useChatRoom = (): UseChatRoomReturn => {
     const [memberVersion, setMemberVersion] = useState(0);
 
     const messageListRef = useRef<HTMLElement | null>(null);
+    // true when messages were appended (new msg / room load) → auto-scroll to bottom
+    // false when messages were prepended (load more) → preserve scroll position
+    const shouldScrollToBottomRef = useRef(true);
     const connectionRef = useRef<ChatConnection | null>(null);
     const myUserIdRef = useRef<string | null>(null);
     // tracks which roomIds are currently subscribed (avoids double-subscribe)
@@ -79,6 +88,24 @@ export const useChatRoom = (): UseChatRoomReturn => {
     const roomIdsRef = useRef<Set<string>>(new Set());
     // always-current handler for user-level room events (avoids stale closure in Effect 1)
     const userRoomEventHandlerRef = useRef<(event: RawWsEvent) => void>(() => undefined);
+    // debounce timer for readConversation — batches rapid incoming messages into one API call
+    const readDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const scheduleReadConversation = useCallback((roomId: string) => {
+        if (readDebounceRef.current) clearTimeout(readDebounceRef.current);
+        readDebounceRef.current = setTimeout(() => {
+            void readConversation(roomId);
+            readDebounceRef.current = null;
+        }, 1500);
+    }, []);
+
+    const flushReadConversation = useCallback((roomId: string) => {
+        if (readDebounceRef.current) {
+            clearTimeout(readDebounceRef.current);
+            readDebounceRef.current = null;
+        }
+        void readConversation(roomId);
+    }, []);
 
     // Keep refs in sync with state
     useEffect(() => {
@@ -100,7 +127,7 @@ export const useChatRoom = (): UseChatRoomReturn => {
     }, [myUserId]);
 
     useEffect(() => {
-        if (!messageListRef.current) return;
+        if (!messageListRef.current || !shouldScrollToBottomRef.current) return;
         messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
     }, [messages, selectedRoom?.id]);
 
@@ -109,11 +136,14 @@ export const useChatRoom = (): UseChatRoomReturn => {
     const loadConversation = async (roomId: string) => {
         setIsLoadingMessages(true);
         setErrorMessage('');
+        shouldScrollToBottomRef.current = true;
         try {
             const detail = await getConversationDetail(roomId);
             setSelectedRoom(detail.room);
             setMessages(detail.messages.data || []);
-            await readConversation(roomId);
+            setMessageCursor(detail.messages.nextCursor);
+            setHasMoreMessages(detail.messages.hasMore);
+            flushReadConversation(roomId);
             setRooms((prev) =>
                 prev.map((r) =>
                     r.id === roomId ? { ...r, unreadCount: 0, lastMessage: detail.room.lastMessage } : r,
@@ -123,6 +153,36 @@ export const useChatRoom = (): UseChatRoomReturn => {
             setErrorMessage(error instanceof Error ? error.message : 'Không tải được cuộc trò chuyện.');
         } finally {
             setIsLoadingMessages(false);
+        }
+    };
+
+    const handleLoadMoreMessages = async () => {
+        const roomId = selectedRoomRef.current?.id;
+        if (!roomId || !hasMoreMessages || isLoadingMoreMessages || !messageCursor) return;
+
+        setIsLoadingMoreMessages(true);
+        shouldScrollToBottomRef.current = false;
+
+        // Save scroll position before prepending
+        const list = messageListRef.current;
+        const prevScrollHeight = list?.scrollHeight ?? 0;
+
+        try {
+            const result = await getConversationDetail(roomId, messageCursor);
+            const older = result.messages.data ?? [];
+            setMessages((prev) => [...older, ...prev]);
+            setMessageCursor(result.messages.nextCursor);
+            setHasMoreMessages(result.messages.hasMore);
+
+            // Restore scroll position after DOM update
+            requestAnimationFrame(() => {
+                if (!list) return;
+                list.scrollTop = list.scrollHeight - prevScrollHeight;
+            });
+        } catch {
+            // silently ignore — user can retry by scrolling up again
+        } finally {
+            setIsLoadingMoreMessages(false);
         }
     };
 
@@ -204,15 +264,24 @@ export const useChatRoom = (): UseChatRoomReturn => {
 
                     // Merge: update rooms that exist in the fetch, keep rooms that don't
                     // (avoids rooms disappearing due to pagination when refreshing)
+                    const activeRoomId = selectedRoomRef.current?.id;
                     setRooms((prev) => {
-                        const merged = prev.map((room) => fetchedMap.get(room.id) ?? room);
+                        const merged = prev.map((room) => {
+                            const fromServer = fetchedMap.get(room.id);
+                            if (!fromServer) return room;
+                            // Active room: user is currently reading it → unread is always 0.
+                            // Server may return stale count if readConversation hasn't been
+                            // committed yet — client is authoritative here.
+                            if (room.id === activeRoomId) return { ...fromServer, unreadCount: 0 };
+                            return fromServer;
+                        });
                         const existingIds = new Set(prev.map((r) => r.id));
                         const added = fetched.filter((room) => !existingIds.has(room.id));
                         return [...merged, ...added];
                     });
 
-                    const updated = fetchedMap.get(selectedRoomRef.current?.id ?? '');
-                    if (updated) setSelectedRoom(updated);
+                    const updated = fetchedMap.get(activeRoomId ?? '');
+                    if (updated) setSelectedRoom({ ...updated, unreadCount: 0 });
                 })
                 .catch(() => undefined),
         [],
@@ -251,6 +320,7 @@ export const useChatRoom = (): UseChatRoomReturn => {
                             }
                             return [...prev, message];
                         });
+                        scheduleReadConversation(message.roomId);
                     }
 
                     setRooms((prev) =>
@@ -325,7 +395,7 @@ export const useChatRoom = (): UseChatRoomReturn => {
         // setMessages/setRooms/setOnlineUserIds are stable — no deps needed
         // selectedRoomRef is a ref — read via .current, no dep needed
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [],
+        [scheduleReadConversation],
     );
 
     const handleMemberEvent = useCallback(
@@ -510,6 +580,8 @@ export const useChatRoom = (): UseChatRoomReturn => {
         messageInput,
         isLoadingRooms,
         isLoadingMessages,
+        isLoadingMoreMessages,
+        hasMoreMessages,
         isSending,
         errorMessage,
         myUserId,
@@ -521,6 +593,7 @@ export const useChatRoom = (): UseChatRoomReturn => {
         setReplyTo,
         handleSelectRoom,
         handleSendMessage,
+        handleLoadMoreMessages,
         handleRoomLeft,
         handleRoomDeleted,
         handleRoomInfoUpdated,

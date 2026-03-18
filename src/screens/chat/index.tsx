@@ -19,6 +19,8 @@ export default function Chat({ onNavigate }: { onNavigate: (s: Screen) => void }
         messageInput,
         isLoadingRooms,
         isLoadingMessages,
+        isLoadingMoreMessages,
+        hasMoreMessages,
         isSending,
         errorMessage,
         myUserId,
@@ -30,6 +32,7 @@ export default function Chat({ onNavigate }: { onNavigate: (s: Screen) => void }
         setReplyTo,
         handleSelectRoom,
         handleSendMessage,
+        handleLoadMoreMessages,
         handleRoomLeft,
         handleRoomDeleted,
         handleRoomInfoUpdated,
@@ -60,10 +63,13 @@ export default function Chat({ onNavigate }: { onNavigate: (s: Screen) => void }
                     rooms={rooms}
                     isLoading={isLoadingMessages}
                     hasRoom={selectedRoom !== null}
+                    hasMore={hasMoreMessages}
+                    isLoadingMore={isLoadingMoreMessages}
                     myUserId={myUserId}
                     onlineUserIds={onlineUserIds}
                     listRef={messageListRef}
                     onReply={setReplyTo}
+                    onLoadMore={handleLoadMoreMessages}
                 />
                 <MessageInput
                     value={messageInput}

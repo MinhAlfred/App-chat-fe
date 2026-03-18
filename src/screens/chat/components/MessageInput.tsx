@@ -1,4 +1,4 @@
-import { FormEvent } from 'react';
+import { FormEvent, useEffect, useRef } from 'react';
 import { Paperclip, Send, Smile, X } from 'lucide-react';
 import { MessageResponse } from '../../../types/message';
 
@@ -14,6 +14,13 @@ type Props = {
 };
 
 export default function MessageInput({ value, onChange, onSubmit, disabled, isSending, errorMessage, replyTo, onCancelReply }: Props) {
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    // Restore focus after send (isSending flips false → message cleared → focus back)
+    useEffect(() => {
+        if (!isSending) inputRef.current?.focus();
+    }, [isSending]);
+
     return (
         <footer className="px-6 pt-3 pb-6 bg-white border-t border-slate-100">
             {errorMessage && <p className="text-sm text-red-500 mb-2">{errorMessage}</p>}
@@ -44,12 +51,13 @@ export default function MessageInput({ value, onChange, onSubmit, disabled, isSe
                     <Paperclip className="h-5 w-5" />
                 </button>
                 <input
+                    ref={inputRef}
                     className="flex-1 bg-transparent border-none focus:ring-0 text-sm placeholder-slate-400 outline-none"
                     placeholder="Type a message..."
                     type="text"
                     value={value}
                     onChange={(e) => onChange(e.target.value)}
-                    disabled={disabled || isSending}
+                    disabled={disabled}
                 />
                 <button
                     className="p-2 text-slate-400 hover:text-orange-400 transition-colors"
