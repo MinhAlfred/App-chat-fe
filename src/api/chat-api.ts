@@ -16,6 +16,7 @@ import {
     getMessages,
     removeReaction,
     sendMessage,
+    sendFileMessage as sendFileMessageApi,
 } from './messages-api';
 import { addMembers, getRoomMembers, leaveRoom, removeMember, updateMemberRole } from './members-api';
 import { CursorPage, PageResponse } from '../types/response';
@@ -110,6 +111,14 @@ export const forwardMessageToConversation = async (
     targetRoomId: string,
 ): Promise<MessageResponse> => {
     return forwardMessage(messageId, targetRoomId);
+};
+
+export const sendFileToConversation = async (
+    roomId: string,
+    file: File,
+    replyToId?: string | null,
+): Promise<MessageResponse> => {
+    return sendFileMessageApi(roomId, file, replyToId);
 };
 
 export const reactToMessage = async (messageId: string, emoji: string): Promise<void> => {

@@ -14,6 +14,7 @@ type Props = {
     onNavigate: (s: Screen) => void;
     onlineByRoom: ReadonlyMap<string, ReadonlySet<string>>;
     myUserId: string | null;
+    myAvatar: string | null;
 };
 
 export default function Sidebar({
@@ -26,6 +27,7 @@ export default function Sidebar({
     onNavigate,
     onlineByRoom,
     myUserId,
+    myAvatar,
 }: Props) {
     return (
         <aside className="w-80 md:w-96 flex flex-col border-r border-slate-100 bg-slate-50/30">
@@ -34,7 +36,7 @@ export default function Sidebar({
                     className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
                     onClick={() => onNavigate('settings')}
                 >
-                    <Avatar name="U" online size="lg" />
+                    <Avatar name="U" src={myAvatar} online size="lg" />
                     <div>
                         <h2 className="font-bold text-slate-800">My Account</h2>
                         <p className="text-xs text-slate-500">Connected</p>
@@ -83,6 +85,7 @@ export default function Sidebar({
                             online={hasOnlineOther}
                             onClick={() => onSelectRoom(room)}
                         />
+
                     );
                 })}
             </nav>

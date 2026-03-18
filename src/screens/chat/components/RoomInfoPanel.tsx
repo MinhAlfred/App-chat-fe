@@ -242,7 +242,7 @@ function AddMembersModal({ room, existingUserIds, onAdded, onCancel }: AddMember
                                 type="button"
                                 disabled={already}
                             >
-                                <Avatar name={u.displayName || u.username} size="sm" />
+                                <Avatar name={u.displayName || u.username} src={u.avatar} size="sm" />
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm font-medium text-slate-800 truncate">
                                         {u.displayName || u.username}
@@ -424,7 +424,7 @@ export default function RoomInfoPanel({
                                     key={m.id}
                                     className="flex items-center gap-3 p-2 rounded-xl hover:bg-slate-100 transition-colors group"
                                 >
-                                    <Avatar name={m.displayName} online={isOnline} size="md" />
+                                    <Avatar name={m.displayName} src={m.avatar} online={isOnline} size="md" />
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-semibold text-slate-800 truncate">
                                             {m.displayName}

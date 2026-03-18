@@ -6,6 +6,7 @@ import {
     getConversationMembers,
     readConversation,
     sendTextMessage,
+    sendFileToConversation,
 } from '../../api/chat-api';
 import { getAccessToken } from '../../auth/session';
 import { getAllOnlineUserIds, getMe } from '../../api/users-api';
@@ -35,6 +36,7 @@ export type UseChatRoomReturn = {
     isSending: boolean;
     errorMessage: string;
     myUserId: string | null;
+    myAvatar: string | null;
     onlineUserIds: ReadonlySet<string>;
     onlineByRoom: ReadonlyMap<string, ReadonlySet<string>>;
     messageListRef: RefObject<HTMLElement | null>;
@@ -44,6 +46,7 @@ export type UseChatRoomReturn = {
     setMessageInput: (v: string) => void;
     handleSelectRoom: (room: RoomResponse) => Promise<void>;
     handleSendMessage: (e: FormEvent) => Promise<void>;
+    handleSendFile: (file: File) => Promise<void>;
     handleLoadMoreMessages: () => Promise<void>;
     handleRoomLeft: (roomId: string) => void;
     handleRoomDeleted: (roomId: string) => void;
@@ -69,6 +72,7 @@ export const useChatRoom = (): UseChatRoomReturn => {
     const [errorMessage, setErrorMessage] = useState('');
     const [replyTo, setReplyTo] = useState<MessageResponse | null>(null);
     const [myUserId, setMyUserId] = useState<string | null>(null);
+    const [myAvatar, setMyAvatar] = useState<string | null>(null);
     const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
     const [onlineByRoom, setOnlineByRoom] = useState<Map<string, Set<string>>>(new Map());
 
@@ -123,7 +127,7 @@ export const useChatRoom = (): UseChatRoomReturn => {
 
     useEffect(() => {
         getMe()
-            .then((me) => setMyUserId(me.id))
+            .then((me) => { setMyUserId(me.id); setMyAvatar(me.avatar ?? null); })
             .catch(() => setMyUserId(null));
     }, []);
 
@@ -297,6 +301,29 @@ export const useChatRoom = (): UseChatRoomReturn => {
             );
         } catch (error) {
             setErrorMessage(error instanceof Error ? error.message : 'Gửi tin nhắn thất bại.');
+        } finally {
+            setIsSending(false);
+        }
+    };
+
+    const handleSendFile = async (file: File) => {
+        if (!selectedRoom || isSending) return;
+
+        setIsSending(true);
+        setErrorMessage('');
+        try {
+            const created = await sendFileToConversation(selectedRoom.id, file, replyTo?.id);
+            setMessages((prev) => [...prev, created]);
+            setReplyTo(null);
+            setRooms((prev) =>
+                prev.map((r) =>
+                    r.id === selectedRoom.id
+                        ? { ...r, lastMessage: created.fileName ?? created.content, lastMessageAt: created.createdAt }
+                        : r,
+                ),
+            );
+        } catch (error) {
+            setErrorMessage(error instanceof Error ? error.message : 'Gửi file thất bại.');
         } finally {
             setIsSending(false);
         }
@@ -670,6 +697,7 @@ export const useChatRoom = (): UseChatRoomReturn => {
         isSending,
         errorMessage,
         myUserId,
+        myAvatar,
         onlineUserIds,
         onlineByRoom,
         messageListRef,
@@ -679,6 +707,7 @@ export const useChatRoom = (): UseChatRoomReturn => {
         setReplyTo,
         handleSelectRoom,
         handleSendMessage,
+        handleSendFile,
         handleLoadMoreMessages,
         handleRoomLeft,
         handleRoomDeleted,

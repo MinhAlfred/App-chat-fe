@@ -37,6 +37,23 @@ export const forwardMessage = async (messageId: string, targetRoomId: string): P
     return unwrapApiData(response);
 };
 
+export const sendFileMessage = async (
+    roomId: string,
+    file: File,
+    replyToId?: string | null,
+): Promise<MessageResponse> => {
+    const formData = new FormData();
+    formData.append('roomId', roomId);
+    formData.append('file', file);
+    if (replyToId) formData.append('replyToId', replyToId);
+    const response = await axiosClient.post<ApiResponse<MessageResponse>>(
+        `${MESSAGES_BASE}/files`,
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+    return unwrapApiData(response);
+};
+
 export const addReaction = async (messageId: string, payload: AddReactionRequest): Promise<void> => {
     await axiosClient.post<ApiResponse<null>>(`${MESSAGES_BASE}/${messageId}/reactions`, payload);
 };

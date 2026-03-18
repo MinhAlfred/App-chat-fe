@@ -6,6 +6,7 @@ type Props = {
     value: string;
     onChange: (v: string) => void;
     onSubmit: (e: FormEvent) => void;
+    onFileUpload: (file: File) => void;
     disabled: boolean;
     isSending: boolean;
     errorMessage: string;
@@ -13,13 +14,20 @@ type Props = {
     onCancelReply?: () => void;
 };
 
-export default function MessageInput({ value, onChange, onSubmit, disabled, isSending, errorMessage, replyTo, onCancelReply }: Props) {
+export default function MessageInput({ value, onChange, onSubmit, onFileUpload, disabled, isSending, errorMessage, replyTo, onCancelReply }: Props) {
     const inputRef = useRef<HTMLInputElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Restore focus after send (isSending flips false → message cleared → focus back)
     useEffect(() => {
         if (!isSending) inputRef.current?.focus();
     }, [isSending]);
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) onFileUpload(file);
+        e.target.value = '';
+    };
 
     return (
         <footer className="px-6 pt-3 pb-6 bg-white border-t border-slate-100">
@@ -44,12 +52,20 @@ export default function MessageInput({ value, onChange, onSubmit, disabled, isSe
                 onSubmit={onSubmit}
             >
                 <button
-                    className="p-2 text-slate-500 hover:text-blue-600 transition-colors"
+                    className="p-2 text-slate-500 hover:text-blue-600 transition-colors disabled:opacity-40"
                     title="Attach file"
                     type="button"
+                    disabled={disabled || isSending}
+                    onClick={() => fileInputRef.current?.click()}
                 >
                     <Paperclip className="h-5 w-5" />
                 </button>
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    onChange={handleFileChange}
+                />
                 <input
                     ref={inputRef}
                     className="flex-1 bg-transparent border-none focus:ring-0 text-sm placeholder-slate-400 outline-none"

@@ -1,5 +1,6 @@
 import { MoreVertical, Phone, Video } from 'lucide-react';
 import { RoomResponse } from '../../../types/room';
+import Avatar from './Avatar';
 
 type Props = {
     room: RoomResponse | null;
@@ -8,22 +9,27 @@ type Props = {
 };
 
 export default function ChatHeader({ room, onlineCount = 0, onToggleInfo }: Props) {
+    const isOnline = onlineCount > 0;
+
     return (
         <header className="h-20 px-6 border-b border-slate-100 flex items-center justify-between glass-effect sticky top-0 z-10">
             <div className="flex items-center gap-4 min-w-0">
-                <div className="w-11 h-11 rounded-full bg-slate-200 text-slate-600 font-bold flex items-center justify-center flex-shrink-0">
-                    {(room?.name || 'R').slice(0, 1).toUpperCase()}
-                </div>
+                <Avatar
+                    name={room?.name || 'R'}
+                    src={room?.avatar}
+                    online={isOnline}
+                    size="md"
+                />
                 <div className="min-w-0">
                     <h3 className="font-bold text-slate-800 leading-tight truncate">
                         {room?.name || 'Select a conversation'}
                     </h3>
                     <p className="text-xs text-slate-500 font-medium truncate">
                         {room?.type === 'GROUP'
-                            ? onlineCount > 0
+                            ? isOnline
                                 ? `${room.memberCount} members · ${onlineCount} online`
                                 : `${room.memberCount} members`
-                            : onlineCount > 0
+                            : isOnline
                                 ? 'Online'
                                 : ''}
                     </p>

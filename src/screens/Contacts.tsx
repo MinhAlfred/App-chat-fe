@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { MessageSquare, Users, Settings as SettingsIcon, UserPlus, Search, MessageCircle } from 'lucide-react';
+import Avatar from './chat/components/Avatar';
 import { useNavigate } from 'react-router-dom';
 import { Screen, screenPath } from '../navigation/routes';
 import { getAdminUsers, getMe, search as searchUsers } from '../api/users-api';
 import { startPrivateConversation } from '../api/chat-api';
-import { UserResponse } from '../types/auth';
+import { OnlineStatus, UserResponse } from '../types/auth';
 
 export default function Contacts({ onNavigate }: { onNavigate: (s: Screen) => void }) {
     const navigate = useNavigate();
@@ -191,12 +192,12 @@ export default function Contacts({ onNavigate }: { onNavigate: (s: Screen) => vo
                                     className="flex items-center justify-between p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-primary/30 transition-all hover:shadow-md group"
                                 >
                                     <div className="flex items-center gap-4 min-w-0">
-                                        <div className="relative">
-                                            <div className="w-16 h-16 rounded-full overflow-hidden bg-slate-100 text-slate-600 font-bold flex items-center justify-center">
-                                                {(contact.displayName || contact.username || 'U').slice(0, 1).toUpperCase()}
-                                            </div>
-                                            <span className="absolute bottom-1 right-1 w-3.5 h-3.5 bg-green-500 border-2 border-white dark:border-slate-900 rounded-full"></span>
-                                        </div>
+                                        <Avatar
+                                            name={contact.displayName || contact.username}
+                                            src={contact.avatar}
+                                            online={contact.onlineStatus === OnlineStatus.ONLINE}
+                                            size="lg"
+                                        />
                                         <div className="min-w-0">
                                             <h4 className="font-bold text-slate-900 dark:text-slate-100 truncate">{contact.displayName || contact.username}</h4>
                                             <p className="text-xs text-slate-500 dark:text-slate-400 truncate">@{contact.username}</p>

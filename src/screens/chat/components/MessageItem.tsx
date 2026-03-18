@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Forward, Reply, Smile } from 'lucide-react';
+import { Forward, Reply, Smile, FileText, Download } from 'lucide-react';
 import EmojiPicker, { EmojiClickData, Theme } from 'emoji-picker-react';
-import { MessageResponse } from '../../../types/message';
+import { MessageResponse, MessageType } from '../../../types/message';
 import { reactToMessage, unreactMessage } from '../../../api/chat-api';
 import { formatTime } from '../utils';
 import Avatar from './Avatar';
@@ -12,6 +12,14 @@ type Props = {
     isSenderOnline: boolean;
     onForward: (message: MessageResponse) => void;
     onReply: (message: MessageResponse) => void;
+};
+
+const IMAGE_EXTENSIONS = /\.(jpe?g|png|gif|webp|bmp|svg|avif)(\?.*)?$/i;
+
+const isImageUrl = (url: string | null | undefined, fileName: string | null | undefined): boolean => {
+    if (!url) return false;
+    if (IMAGE_EXTENSIONS.test(fileName ?? '')) return true;
+    return IMAGE_EXTENSIONS.test(url);
 };
 
 export default function MessageItem({ message, isMine, isSenderOnline, onForward, onReply }: Props) {
@@ -60,7 +68,7 @@ export default function MessageItem({ message, isMine, isSenderOnline, onForward
 
     return (
         <div className={`group flex items-end gap-3 max-w-[85%] ${isMine ? 'ml-auto flex-row-reverse' : ''}`}>
-            <Avatar name={message.senderName} online={isSenderOnline} size="sm" />
+            <Avatar name={message.senderName} src={message.senderAvatar} online={isSenderOnline} size="sm" />
 
             <div className="relative">
                 {!isMine && (
@@ -80,7 +88,34 @@ export default function MessageItem({ message, isMine, isSenderOnline, onForward
                             <p className="truncate">{message.replyTo.content}</p>
                         </div>
                     )}
-                    {message.content || '[No content]'}
+                    {(message.type === MessageType.IMAGE || isImageUrl(message.mediaUrl, message.fileName)) && message.mediaUrl ? (
+                        <a href={message.mediaUrl} target="_blank" rel="noopener noreferrer">
+                            <img
+                                src={message.mediaUrl}
+                                alt={message.fileName || 'image'}
+                                className="max-w-[260px] max-h-[260px] rounded-xl object-cover"
+                            />
+                        </a>
+                    ) : message.type === MessageType.FILE && message.mediaUrl ? (
+                        <a
+                            href={message.mediaUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            download={message.fileName}
+                            className={`flex items-center gap-3 px-3 py-2 rounded-xl min-w-[180px] transition-colors ${isMine ? 'bg-blue-500/40 hover:bg-blue-500/60' : 'bg-slate-100 hover:bg-slate-200'}`}
+                        >
+                            <FileText className="h-8 w-8 flex-shrink-0 opacity-70" />
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">{message.fileName || 'File'}</p>
+                                {message.fileSize ? (
+                                    <p className="text-xs opacity-60">{(message.fileSize / 1024).toFixed(1)} KB</p>
+                                ) : null}
+                            </div>
+                            <Download className="h-4 w-4 flex-shrink-0 opacity-60" />
+                        </a>
+                    ) : (
+                        message.content || '[No content]'
+                    )}
                     <span
                         className={`pointer-events-none absolute -bottom-6 ${isMine ? 'right-0' : 'left-0'} whitespace-nowrap rounded-lg bg-slate-800/80 px-2 py-0.5 text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity z-10`}
                     >

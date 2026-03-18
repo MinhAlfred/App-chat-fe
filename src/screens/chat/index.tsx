@@ -24,6 +24,7 @@ export default function Chat({ onNavigate }: { onNavigate: (s: Screen) => void }
         isSending,
         errorMessage,
         myUserId,
+        myAvatar,
         onlineUserIds,
         onlineByRoom,
         messageListRef,
@@ -33,6 +34,7 @@ export default function Chat({ onNavigate }: { onNavigate: (s: Screen) => void }
         setReplyTo,
         handleSelectRoom,
         handleSendMessage,
+        handleSendFile,
         handleLoadMoreMessages,
         handleRoomLeft,
         handleRoomDeleted,
@@ -55,6 +57,7 @@ export default function Chat({ onNavigate }: { onNavigate: (s: Screen) => void }
                 onNavigate={onNavigate}
                 onlineByRoom={onlineByRoom}
                 myUserId={myUserId}
+                myAvatar={myAvatar}
             />
             <main className="flex-1 flex flex-col min-w-0 bg-white">
                 <ChatHeader
@@ -79,6 +82,7 @@ export default function Chat({ onNavigate }: { onNavigate: (s: Screen) => void }
                     value={messageInput}
                     onChange={setMessageInput}
                     onSubmit={handleSendMessage}
+                    onFileUpload={handleSendFile}
                     disabled={!selectedRoom}
                     isSending={isSending}
                     errorMessage={errorMessage}

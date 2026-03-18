@@ -71,7 +71,7 @@ function ForwardModal({ message, rooms, onClose }: ForwardModalProps) {
                                     type="button"
                                     disabled={!!loadingId || sent}
                                 >
-                                    <Avatar name={room.name} size="sm" />
+                                    <Avatar name={room.name} src={room.avatar} size="sm" />
                                     <span className="flex-1 text-sm font-medium text-slate-800 truncate">
                                         {room.name}
                                     </span>

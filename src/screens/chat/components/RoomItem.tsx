@@ -18,7 +18,7 @@ export default function RoomItem({ room, isActive, online, onClick }: Props) {
             onClick={onClick}
             type="button"
         >
-            <Avatar name={room.name} online={online} size="lg" />
+            <Avatar name={room.name} src={room.avatar} online={online} size="lg" />
             <div className="flex-1 min-w-0">
                 <div className="flex justify-between items-baseline mb-1">
                     <h3 className="font-semibold text-slate-800 truncate">{room.name || 'Unnamed room'}</h3>
