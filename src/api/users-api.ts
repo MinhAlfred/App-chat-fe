@@ -53,6 +53,11 @@ export const getUsersStatusBatch = async (userIds: string[]): Promise<OnlineStat
     return unwrapApiData(response);
 };
 
+export const getAllOnlineUserIds = async (): Promise<string[]> => {
+    const response = await axiosClient.get<ApiResponse<string[]>>(`${USERS_BASE}/status/online`);
+    return unwrapApiData(response);
+};
+
 export const getAdminUsers = async (page = 0, size = 20): Promise<PageResponse<UserResponse>> => {
     const params = toQueryParams({ page, size });
     const response = await axiosClient.get<ApiResponse<PageResponse<UserResponse>>>(

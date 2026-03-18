@@ -25,6 +25,7 @@ export default function Chat({ onNavigate }: { onNavigate: (s: Screen) => void }
         errorMessage,
         myUserId,
         onlineUserIds,
+        onlineByRoom,
         messageListRef,
         setSearchKeyword,
         setMessageInput,
@@ -52,10 +53,13 @@ export default function Chat({ onNavigate }: { onNavigate: (s: Screen) => void }
                     void handleSelectRoom(room);
                 }}
                 onNavigate={onNavigate}
+                onlineByRoom={onlineByRoom}
+                myUserId={myUserId}
             />
             <main className="flex-1 flex flex-col min-w-0 bg-white">
                 <ChatHeader
                     room={selectedRoom}
+                    onlineCount={selectedRoom ? ((onlineByRoom.get(selectedRoom.id)?.size ?? 0)) : 0}
                     onToggleInfo={selectedRoom ? () => setIsInfoOpen((v) => !v) : undefined}
                 />
                 <MessageList

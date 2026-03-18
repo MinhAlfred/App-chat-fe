@@ -3,11 +3,12 @@ import { useSearchParams } from 'react-router-dom';
 import {
     getConversationDetail,
     getConversationList,
+    getConversationMembers,
     readConversation,
     sendTextMessage,
 } from '../../api/chat-api';
 import { getAccessToken } from '../../auth/session';
-import { getMe } from '../../api/users-api';
+import { getAllOnlineUserIds, getMe } from '../../api/users-api';
 import { ChatConnection, setupChat } from '../../service/websocket';
 import { MessageResponse } from '../../types/message';
 import { RoomResponse } from '../../types/room';
@@ -35,6 +36,7 @@ export type UseChatRoomReturn = {
     errorMessage: string;
     myUserId: string | null;
     onlineUserIds: ReadonlySet<string>;
+    onlineByRoom: ReadonlyMap<string, ReadonlySet<string>>;
     messageListRef: RefObject<HTMLElement | null>;
     replyTo: MessageResponse | null;
     setReplyTo: (msg: MessageResponse | null) => void;
@@ -68,6 +70,7 @@ export const useChatRoom = (): UseChatRoomReturn => {
     const [replyTo, setReplyTo] = useState<MessageResponse | null>(null);
     const [myUserId, setMyUserId] = useState<string | null>(null);
     const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
+    const [onlineByRoom, setOnlineByRoom] = useState<Map<string, Set<string>>>(new Map());
 
     // connectionKey increments when STOMP reconnects → triggers room subscription effect
     const [connectionKey, setConnectionKey] = useState(0);
@@ -131,6 +134,40 @@ export const useChatRoom = (): UseChatRoomReturn => {
         messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
     }, [messages, selectedRoom?.id]);
 
+    // ─── Seed initial presence for all known rooms ─────────────────────────
+    // Called once after rooms load. Fetches all online IDs + all room member
+    // lists in parallel, then populates onlineUserIds and onlineByRoom.
+
+    const seedAllPresence = async (roomIds: string[]) => {
+        try {
+            const [onlineIds, ...memberPages] = await Promise.all([
+                getAllOnlineUserIds().catch((): string[] => []),
+                ...roomIds.map((rid) =>
+                    getConversationMembers(rid, 0, 100).catch(() => ({ content: [] })),
+                ),
+            ]);
+
+            if (onlineIds.length === 0) return;
+
+            const onlineSet = new Set(onlineIds);
+            setOnlineUserIds(onlineSet);
+
+            setOnlineByRoom(() => {
+                const map = new Map<string, Set<string>>();
+                roomIds.forEach((rid, i) => {
+                    const page = memberPages[i];
+                    const onlineInRoom = (page?.content ?? [])
+                        .map((m) => m.userId)
+                        .filter((uid) => onlineSet.has(uid));
+                    if (onlineInRoom.length > 0) map.set(rid, new Set(onlineInRoom));
+                });
+                return map;
+            });
+        } catch {
+            // non-critical
+        }
+    };
+
     // ─── Load conversation detail ───────────────────────────────────────────
 
     const loadConversation = async (roomId: string) => {
@@ -170,7 +207,11 @@ export const useChatRoom = (): UseChatRoomReturn => {
         try {
             const result = await getConversationDetail(roomId, messageCursor);
             const older = result.messages.data ?? [];
-            setMessages((prev) => [...older, ...prev]);
+            setMessages((prev) => {
+                const existingIds = new Set(prev.map((m) => m.id));
+                const dedupedOlder = older.filter((m) => !existingIds.has(m.id));
+                return [...dedupedOlder, ...prev];
+            });
             setMessageCursor(result.messages.nextCursor);
             setHasMoreMessages(result.messages.hasMore);
 
@@ -206,6 +247,9 @@ export const useChatRoom = (): UseChatRoomReturn => {
                 const preferred = roomIdFromUrl
                     ? (items.find((r) => r.id === roomIdFromUrl) ?? items[0])
                     : items[0];
+
+                // Seed presence for all rooms in parallel with conversation load
+                void seedAllPresence(items.map((r) => r.id));
 
                 await loadConversation(preferred.id);
             } catch (error) {
@@ -377,15 +421,40 @@ export const useChatRoom = (): UseChatRoomReturn => {
                     return;
                 }
                 case 'ONLINE': {
-                    setOnlineUserIds((prev) => new Set([...prev, parsed.userId]));
+                    const { userId, roomIds } = parsed;
+                    setOnlineUserIds((prev) => new Set([...prev, userId]));
+                    if (roomIds.length > 0) {
+                        setOnlineByRoom((prev) => {
+                            const next = new Map(prev);
+                            roomIds.forEach((rid) => {
+                                const set = new Set(next.get(rid) ?? []);
+                                set.add(userId);
+                                next.set(rid, set);
+                            });
+                            return next;
+                        });
+                    }
                     return;
                 }
                 case 'OFFLINE': {
+                    const { userId, roomIds } = parsed;
                     setOnlineUserIds((prev) => {
                         const next = new Set(prev);
-                        next.delete(parsed.userId);
+                        next.delete(userId);
                         return next;
                     });
+                    if (roomIds.length > 0) {
+                        setOnlineByRoom((prev) => {
+                            const next = new Map(prev);
+                            roomIds.forEach((rid) => {
+                                const set = new Set(next.get(rid) ?? []);
+                                set.delete(userId);
+                                if (set.size === 0) next.delete(rid);
+                                else next.set(rid, set);
+                            });
+                            return next;
+                        });
+                    }
                     return;
                 }
                 default:
@@ -478,6 +547,7 @@ export const useChatRoom = (): UseChatRoomReturn => {
                     onMessageEvent: handleWsEvent,
                     onMemberEvent: handleMemberEvent,
                     onRoomEvent: handleRoomEvent,
+                    onPresenceEvent: handleWsEvent,
                 });
                 subscribed.add(id);
             }
@@ -586,6 +656,7 @@ export const useChatRoom = (): UseChatRoomReturn => {
         errorMessage,
         myUserId,
         onlineUserIds,
+        onlineByRoom,
         messageListRef,
         setSearchKeyword,
         setMessageInput,

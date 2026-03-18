@@ -3,10 +3,11 @@ import { RoomResponse } from '../../../types/room';
 
 type Props = {
     room: RoomResponse | null;
+    onlineCount?: number;
     onToggleInfo?: () => void;
 };
 
-export default function ChatHeader({ room, onToggleInfo }: Props) {
+export default function ChatHeader({ room, onlineCount = 0, onToggleInfo }: Props) {
     return (
         <header className="h-20 px-6 border-b border-slate-100 flex items-center justify-between glass-effect sticky top-0 z-10">
             <div className="flex items-center gap-4 min-w-0">
@@ -18,7 +19,13 @@ export default function ChatHeader({ room, onToggleInfo }: Props) {
                         {room?.name || 'Select a conversation'}
                     </h3>
                     <p className="text-xs text-slate-500 font-medium truncate">
-                        {room?.type === 'GROUP' ? `${room.memberCount} members` : ''}
+                        {room?.type === 'GROUP'
+                            ? onlineCount > 0
+                                ? `${room.memberCount} members · ${onlineCount} online`
+                                : `${room.memberCount} members`
+                            : onlineCount > 0
+                                ? 'Online'
+                                : ''}
                     </p>
                 </div>
             </div>

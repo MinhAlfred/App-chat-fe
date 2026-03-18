@@ -12,6 +12,8 @@ type Props = {
     onSearchChange: (v: string) => void;
     onSelectRoom: (room: RoomResponse) => void;
     onNavigate: (s: Screen) => void;
+    onlineByRoom: ReadonlyMap<string, ReadonlySet<string>>;
+    myUserId: string | null;
 };
 
 export default function Sidebar({
@@ -22,6 +24,8 @@ export default function Sidebar({
     onSearchChange,
     onSelectRoom,
     onNavigate,
+    onlineByRoom,
+    myUserId,
 }: Props) {
     return (
         <aside className="w-80 md:w-96 flex flex-col border-r border-slate-100 bg-slate-50/30">
@@ -66,14 +70,21 @@ export default function Sidebar({
                 {!isLoadingRooms && filteredRooms.length === 0 && (
                     <p className="px-3 py-2 text-sm text-slate-500">No conversations found.</p>
                 )}
-                {filteredRooms.map((room) => (
-                    <RoomItem
-                        key={room.id}
-                        room={room}
-                        isActive={room.id === selectedRoom?.id}
-                        onClick={() => onSelectRoom(room)}
-                    />
-                ))}
+                {filteredRooms.map((room) => {
+                    const roomOnline = onlineByRoom.get(room.id);
+                    const hasOnlineOther = roomOnline
+                        ? [...roomOnline].some((uid) => uid !== myUserId)
+                        : false;
+                    return (
+                        <RoomItem
+                            key={room.id}
+                            room={room}
+                            isActive={room.id === selectedRoom?.id}
+                            online={hasOnlineOther}
+                            onClick={() => onSelectRoom(room)}
+                        />
+                    );
+                })}
             </nav>
         </aside>
     );

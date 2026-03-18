@@ -102,6 +102,7 @@ export type ParsedReactionUpdated = {
 export type ParsedPresenceEvent = {
     eventType: 'ONLINE' | 'OFFLINE';
     userId: string;
+    roomIds: string[];
 };
 
 export type ParsedOtherEvent = {
@@ -185,14 +186,21 @@ export const parseWsEvent = (event: RawWsEvent): ParsedWsEvent => {
         }
         case 'ONLINE':
         case 'OFFLINE': {
+            const root = event as Record<string, unknown>;
+            // userId may be at the event root (new BE shape) or inside payload
             const userId =
-                typeof payload.userId === 'string'
-                    ? payload.userId
-                    : typeof payload.senderId === 'string'
-                        ? payload.senderId
-                        : null;
+                typeof root.userId === 'string'
+                    ? root.userId
+                    : typeof payload.userId === 'string'
+                        ? payload.userId
+                        : typeof payload.senderId === 'string'
+                            ? payload.senderId
+                            : null;
             if (!userId) return null;
-            return { eventType, userId };
+            // roomIds from root or payload
+            const rawRoomIds = Array.isArray(root.roomIds) ? root.roomIds : Array.isArray(payload.roomIds) ? payload.roomIds : [];
+            const roomIds = rawRoomIds.filter((id): id is string => typeof id === 'string');
+            return { eventType, userId, roomIds };
         }
         default:
             return { eventType: eventType as UnhandledWsEventType, raw: payload };

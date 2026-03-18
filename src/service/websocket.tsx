@@ -7,6 +7,7 @@ export type RoomHandlers = {
     onMessageEvent: (event: RawWsEvent) => void;
     onMemberEvent?: (event: RawWsEvent) => void;
     onRoomEvent?: (event: RawWsEvent) => void;
+    onPresenceEvent?: (event: RawWsEvent) => void;
 };
 
 export type ChatConnection = {
@@ -18,8 +19,6 @@ export type ChatConnection = {
 export type SetupChatOptions = {
     token: string;
     userId?: string;
-    presenceUserId?: string;
-    onPresenceEvent?: (event: RawWsEvent) => void;
     /** Receives ROOM_CREATED / ROOM_UPDATED events pushed to the current user */
     onUserRoomEvent?: (event: RawWsEvent) => void;
     onError?: (message: string) => void;
@@ -57,8 +56,6 @@ const parsePayload = (raw: string): RawWsEvent => {
 export const setupChat = ({
     token,
     userId,
-    presenceUserId,
-    onPresenceEvent,
     onUserRoomEvent,
     onError,
     wsUrl = 'http://localhost:3000/ws',
@@ -104,6 +101,14 @@ export const setupChat = ({
             );
         }
 
+        if (handlers.onPresenceEvent) {
+            subs.push(
+                stompClient.subscribe(`/topic/room/${roomId}/presence`, (msg) =>
+                    handlers.onPresenceEvent!(parsePayload(msg.body)),
+                ),
+            );
+        }
+
         activeSubscriptions.set(roomId, subs);
     };
 
@@ -119,12 +124,6 @@ export const setupChat = ({
             roomHandlers.forEach((handlers, roomId) => {
                 doSubscribeRoom(roomId, handlers);
             });
-
-            if (onPresenceEvent && presenceUserId) {
-                stompClient.subscribe(`/topic/presence/${presenceUserId}`, (msg) =>
-                    onPresenceEvent(parsePayload(msg.body)),
-                );
-            }
 
             // User-level room events: new room created, room updated, added to a room
             if (onUserRoomEvent && userId) {
