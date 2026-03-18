@@ -91,6 +91,8 @@ export const useChatRoom = (): UseChatRoomReturn => {
     const roomIdsRef = useRef<Set<string>>(new Set());
     // always-current handler for user-level room events (avoids stale closure in Effect 1)
     const userRoomEventHandlerRef = useRef<(event: RawWsEvent) => void>(() => undefined);
+    // roomId → member userId set, populated by seedAllPresence for sidebar online derivation
+    const roomMembersRef = useRef<Map<string, Set<string>>>(new Map());
     // debounce timer for readConversation — batches rapid incoming messages into one API call
     const readDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -147,22 +149,26 @@ export const useChatRoom = (): UseChatRoomReturn => {
                 ),
             ]);
 
+            // Always build the member map so ONLINE events can use it as a fallback
+            // even when no one is currently online (early-return would leave it empty)
+            const memberMap = new Map<string, Set<string>>();
+            roomIds.forEach((rid, i) => {
+                const allMemberIds = (memberPages[i]?.content ?? []).map((m) => m.userId);
+                memberMap.set(rid, new Set(allMemberIds));
+            });
+            roomMembersRef.current = memberMap;
+
             if (onlineIds.length === 0) return;
 
             const onlineSet = new Set(onlineIds);
             setOnlineUserIds(onlineSet);
 
-            setOnlineByRoom(() => {
-                const map = new Map<string, Set<string>>();
-                roomIds.forEach((rid, i) => {
-                    const page = memberPages[i];
-                    const onlineInRoom = (page?.content ?? [])
-                        .map((m) => m.userId)
-                        .filter((uid) => onlineSet.has(uid));
-                    if (onlineInRoom.length > 0) map.set(rid, new Set(onlineInRoom));
-                });
-                return map;
+            const onlineMap = new Map<string, Set<string>>();
+            memberMap.forEach((members, rid) => {
+                const onlineInRoom = [...members].filter((uid) => onlineSet.has(uid));
+                if (onlineInRoom.length > 0) onlineMap.set(rid, new Set(onlineInRoom));
             });
+            setOnlineByRoom(() => onlineMap);
         } catch {
             // non-critical
         }
@@ -423,38 +429,47 @@ export const useChatRoom = (): UseChatRoomReturn => {
                 case 'ONLINE': {
                     const { userId, roomIds } = parsed;
                     setOnlineUserIds((prev) => new Set([...prev, userId]));
-                    if (roomIds.length > 0) {
-                        setOnlineByRoom((prev) => {
-                            const next = new Map(prev);
-                            roomIds.forEach((rid) => {
-                                const set = new Set(next.get(rid) ?? []);
-                                set.add(userId);
-                                next.set(rid, set);
-                            });
-                            return next;
+                    setOnlineByRoom((prev) => {
+                        const next = new Map(prev);
+                        // Use roomIds from event if provided, otherwise fall back to rooms
+                        // where we know the member list and the user is a member.
+                        const knownRooms = roomIds.length > 0
+                            ? roomIds.filter((rid) => roomIdsRef.current.has(rid))
+                            : [...roomMembersRef.current.entries()]
+                                .filter(([, members]) => members.has(userId))
+                                .map(([rid]) => rid);
+                        knownRooms.forEach((rid) => {
+                            const set = new Set(next.get(rid) ?? []);
+                            set.add(userId);
+                            next.set(rid, set);
                         });
-                    }
+                        return next;
+                    });
                     return;
                 }
                 case 'OFFLINE': {
-                    const { userId, roomIds } = parsed;
+                    const { userId } = parsed;
                     setOnlineUserIds((prev) => {
                         const next = new Set(prev);
                         next.delete(userId);
                         return next;
                     });
-                    if (roomIds.length > 0) {
-                        setOnlineByRoom((prev) => {
-                            const next = new Map(prev);
-                            roomIds.forEach((rid) => {
-                                const set = new Set(next.get(rid) ?? []);
-                                set.delete(userId);
-                                if (set.size === 0) next.delete(rid);
-                                else next.set(rid, set);
-                            });
-                            return next;
+                    // Remove from every room — user is offline globally.
+                    // Don't rely on roomIds from the event; it may be empty or incomplete.
+                    setOnlineByRoom((prev) => {
+                        let changed = false;
+                        const next = new Map(prev);
+                        next.forEach((set, rid) => {
+                            if (set.has(userId)) {
+                                changed = true;
+                                const updated = new Set(set);
+                                updated.delete(userId);
+                                if (updated.size === 0) next.delete(rid);
+                                else next.set(rid, updated);
+                            }
                         });
-                    }
+                        return changed ? next : prev;
+                    });
                     return;
                 }
                 default:
