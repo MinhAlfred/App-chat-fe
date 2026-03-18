@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
     getConversationDetail,
@@ -33,7 +33,7 @@ export type UseChatRoomReturn = {
     errorMessage: string;
     myUserId: string | null;
     onlineUserIds: ReadonlySet<string>;
-    messageListRef: React.RefObject<HTMLElement | null>;
+    messageListRef: RefObject<HTMLElement | null>;
     replyTo: MessageResponse | null;
     setReplyTo: (msg: MessageResponse | null) => void;
     setSearchKeyword: (v: string) => void;
@@ -70,6 +70,7 @@ export const useChatRoom = (): UseChatRoomReturn => {
 
     const messageListRef = useRef<HTMLElement | null>(null);
     const connectionRef = useRef<ChatConnection | null>(null);
+    const myUserIdRef = useRef<string | null>(null);
     // tracks which roomIds are currently subscribed (avoids double-subscribe)
     const subscribedRoomIdsRef = useRef<Set<string>>(new Set());
     // always holds the latest selectedRoom without causing subscription re-runs
@@ -93,6 +94,10 @@ export const useChatRoom = (): UseChatRoomReturn => {
             .then((me) => setMyUserId(me.id))
             .catch(() => setMyUserId(null));
     }, []);
+
+    useEffect(() => {
+        myUserIdRef.current = myUserId;
+    }, [myUserId]);
 
     useEffect(() => {
         if (!messageListRef.current) return;
@@ -252,11 +257,11 @@ export const useChatRoom = (): UseChatRoomReturn => {
                         prev.map((r) =>
                             r.id === message.roomId
                                 ? {
-                                      ...r,
-                                      lastMessage: message.content ?? r.lastMessage,
-                                      lastMessageAt: message.createdAt ?? (message as unknown as Record<string, string>).occurredAt ?? r.lastMessageAt,
-                                      unreadCount: isActiveRoom ? 0 : r.unreadCount + 1,
-                                  }
+                                    ...r,
+                                    lastMessage: message.content ?? r.lastMessage,
+                                    lastMessageAt: message.createdAt ?? (message as unknown as Record<string, string>).occurredAt ?? r.lastMessageAt,
+                                    unreadCount: isActiveRoom ? 0 : r.unreadCount + 1,
+                                }
                                 : r,
                         ),
                     );
@@ -278,9 +283,26 @@ export const useChatRoom = (): UseChatRoomReturn => {
                     return;
                 }
                 case 'REACTION_UPDATED': {
-                    const { messageId, reactions } = parsed;
+                    const { messageId, reactions, reactorUserId, reactorEmoji, removed } = parsed;
                     setMessages((prev) =>
-                        prev.map((m) => (m.id === messageId ? { ...m, reactions } : m)),
+                        prev.map((m) => {
+                            if (m.id !== messageId) return m;
+
+                            const isMyReactionEvent = myUserIdRef.current === reactorUserId;
+
+                            // reactionSummary is the authoritative POST-action state — use it directly.
+                            // Assign reactedByMe: my current emoji is reactorEmoji (unless removed).
+                            const myEmoji = isMyReactionEvent
+                                ? (removed ? null : reactorEmoji)
+                                : m.reactions?.find((r) => r.reactedByMe)?.emoji ?? null;
+
+                            const merged = reactions.map((r) => ({
+                                ...r,
+                                reactedByMe: r.emoji === myEmoji,
+                            }));
+
+                            return { ...m, reactions: merged };
+                        }),
                     );
                     return;
                 }
@@ -437,7 +459,7 @@ export const useChatRoom = (): UseChatRoomReturn => {
     // Keep the user-room event handler ref current so Effect 1 never needs to re-run
     userRoomEventHandlerRef.current = (event: RawWsEvent) => {
         const ev = event as Record<string, unknown>;
-        const eventType = ev.eventType as string | undefined;
+        const eventType = (ev.eventType ?? ev.type) as string | undefined;
         const roomId = ev.roomId as string | undefined;
         log('User room event', eventType, roomId);
 

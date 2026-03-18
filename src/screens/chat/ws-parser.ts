@@ -1,6 +1,17 @@
 import { MessageReaction, MessageResponse } from '../../types/message';
 import { RawWsEvent, WsEventType, WS_EVENT_TYPES } from './types';
 
+type HandledWsEventType =
+    | 'MESSAGE_SENT'
+    | 'MESSAGE_FORWARDED'
+    | 'MESSAGE_EDITED'
+    | 'MESSAGE_DELETED'
+    | 'REACTION_UPDATED'
+    | 'ONLINE'
+    | 'OFFLINE';
+
+type UnhandledWsEventType = Exclude<WsEventType, HandledWsEventType>;
+
 const MESSAGE_CONTENT_TYPES = ['TEXT', 'IMAGE', 'VIDEO', 'FILE', 'AUDIO'] as const;
 
 const asRecord = (value: unknown): Record<string, unknown> | null => {
@@ -32,6 +43,16 @@ const getStringValue = (value: unknown): string | null => {
     if (typeof value === 'string') return value;
     const unwrapped = unwrapJsonNodeLike(value);
     return typeof unwrapped === 'string' ? unwrapped : null;
+};
+
+const toNumberValue = (value: unknown): number | null => {
+    const unwrapped = unwrapJsonNodeLike(value);
+    if (typeof unwrapped === 'number' && Number.isFinite(unwrapped)) return unwrapped;
+    if (typeof unwrapped === 'string') {
+        const parsed = Number(unwrapped);
+        return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
 };
 
 const resolveEventPayload = (event: RawWsEvent): Record<string, unknown> => {
@@ -72,6 +93,10 @@ export type ParsedReactionUpdated = {
     eventType: 'REACTION_UPDATED';
     messageId: string;
     reactions: MessageReaction[];
+    reactorUserId: string | null;
+    reactorEmoji: string | null;
+    previousEmoji: string | null;
+    removed: boolean;
 };
 
 export type ParsedPresenceEvent = {
@@ -80,7 +105,7 @@ export type ParsedPresenceEvent = {
 };
 
 export type ParsedOtherEvent = {
-    eventType: WsEventType;
+    eventType: UnhandledWsEventType;
     raw: Record<string, unknown>;
 };
 
@@ -107,10 +132,6 @@ export const parseWsEvent = (event: RawWsEvent): ParsedWsEvent => {
 
     const payload = resolveEventPayload(event);
 
-    console.log('[WS][Parser] raw event:', event);
-    console.log('[WS][Parser] eventType:', eventType);
-    console.log('[WS][Parser] payload:', payload);
-
     const isIncomingMessage =
         eventType === 'MESSAGE_SENT' ||
         eventType === 'MESSAGE_FORWARDED' ||
@@ -120,10 +141,8 @@ export const parseWsEvent = (event: RawWsEvent): ParsedWsEvent => {
         if (typeof payload.id !== 'string' || typeof payload.roomId !== 'string') return null;
         // Normalize occurredAt (forwarded messages) → createdAt
         if (!payload.createdAt && payload.occurredAt) {
-            console.log('[WS][Parser] normalizing occurredAt →', payload.occurredAt);
             payload.createdAt = payload.occurredAt;
         }
-        console.log('[WS][Parser] parsed message payload:', payload);
         return { eventType: 'MESSAGE_SENT', message: payload as unknown as MessageResponse };
     }
 
@@ -151,9 +170,18 @@ export const parseWsEvent = (event: RawWsEvent): ParsedWsEvent => {
             const reactionSummary = asRecord(payload.reactionSummary);
             if (!messageId || !reactionSummary) return null;
             const reactions: MessageReaction[] = Object.entries(reactionSummary)
-                .filter((entry): entry is [string, number] => typeof entry[1] === 'number')
-                .map(([emoji, count]) => ({ emoji, count, reactedByMe: false }));
-            return { eventType: 'REACTION_UPDATED', messageId, reactions };
+                .map(([emoji, countRaw]) => ({ emoji, count: toNumberValue(countRaw) }))
+                .filter((entry): entry is { emoji: string; count: number } => entry.count !== null)
+                .map(({ emoji, count }) => ({ emoji, count, reactedByMe: false }));
+            return {
+                eventType: 'REACTION_UPDATED',
+                messageId,
+                reactions,
+                reactorUserId: typeof payload.reactorUserId === 'string' ? payload.reactorUserId : null,
+                reactorEmoji: typeof payload.reactorEmoji === 'string' ? payload.reactorEmoji : null,
+                previousEmoji: typeof payload.previousEmoji === 'string' ? payload.previousEmoji : null,
+                removed: typeof payload.removed === 'boolean' ? payload.removed : false,
+            };
         }
         case 'ONLINE':
         case 'OFFLINE': {
@@ -161,12 +189,12 @@ export const parseWsEvent = (event: RawWsEvent): ParsedWsEvent => {
                 typeof payload.userId === 'string'
                     ? payload.userId
                     : typeof payload.senderId === 'string'
-                      ? payload.senderId
-                      : null;
+                        ? payload.senderId
+                        : null;
             if (!userId) return null;
             return { eventType, userId };
         }
         default:
-            return { eventType, raw: payload };
+            return { eventType: eventType as UnhandledWsEventType, raw: payload };
     }
 };
