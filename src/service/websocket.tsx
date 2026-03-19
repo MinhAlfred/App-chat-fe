@@ -1,5 +1,4 @@
 import { Client, StompSubscription } from '@stomp/stompjs';
-import SockJS from 'sockjs-client';
 
 type RawWsEvent = Record<string, unknown> & { type?: string };
 
@@ -25,6 +24,7 @@ export type SetupChatOptions = {
     wsUrl?: string;
     debug?: boolean;
     reconnectDelay?: number;
+    /** Interval (ms) for sending /app/heartbeat to update server-side presence. Default 20s */
     heartbeatIntervalMs?: number;
 };
 
@@ -58,7 +58,7 @@ export const setupChat = ({
     userId,
     onUserRoomEvent,
     onError,
-    wsUrl = 'http://localhost:3000/ws',
+    wsUrl = 'ws://localhost:3000/ws',
     debug = false,
     reconnectDelay = 5000,
     heartbeatIntervalMs = 20000,
@@ -68,13 +68,9 @@ export const setupChat = ({
     // roomId → active STOMP subscriptions
     const activeSubscriptions = new Map<string, StompSubscription[]>();
 
-    let heartbeatTimer: number | null = null;
-
-    const wsEndpoint = new URL(wsUrl, window.location.origin);
-    wsEndpoint.searchParams.set('token', token);
+    let presenceTimer: number | null = null;
 
     const connectHeaders: Record<string, string> = { Authorization: `Bearer ${token}` };
-    if (userId) connectHeaders['X-User-Id'] = userId;
 
     const doSubscribeRoom = (roomId: string, handlers: RoomHandlers) => {
         const subs: StompSubscription[] = [];
@@ -113,7 +109,7 @@ export const setupChat = ({
     };
 
     const stompClient = new Client({
-        webSocketFactory: () => new SockJS(wsEndpoint.toString()),
+        webSocketFactory: () => new WebSocket(`${wsUrl.replace(/^http/, 'ws')}?token=${token}`),
         connectHeaders,
         reconnectDelay,
         heartbeatIncoming: 20000,
@@ -132,10 +128,18 @@ export const setupChat = ({
                 );
             }
 
-            if (heartbeatTimer) window.clearInterval(heartbeatTimer);
-            heartbeatTimer = window.setInterval(() => {
+            // Send presence heartbeat to /app/heartbeat so server marks user online
+            stompClient.publish({ destination: '/app/heartbeat' });
+            if (presenceTimer) window.clearInterval(presenceTimer);
+            presenceTimer = window.setInterval(() => {
                 if (stompClient.connected) stompClient.publish({ destination: '/app/heartbeat' });
             }, heartbeatIntervalMs);
+        },
+        onWebSocketClose: () => {
+            if (presenceTimer) {
+                window.clearInterval(presenceTimer);
+                presenceTimer = null;
+            }
         },
         onStompError: (frame) => {
             const message = frame.headers.message || 'Unknown STOMP error';
@@ -143,12 +147,6 @@ export const setupChat = ({
         },
         onWebSocketError: () => {
             onError ? onError('WebSocket connection error') : console.error('WebSocket connection error');
-        },
-        onWebSocketClose: () => {
-            if (heartbeatTimer) {
-                window.clearInterval(heartbeatTimer);
-                heartbeatTimer = null;
-            }
         },
     });
 
@@ -165,9 +163,9 @@ export const setupChat = ({
             roomHandlers.delete(roomId);
         },
         disconnect: () => {
-            if (heartbeatTimer) {
-                window.clearInterval(heartbeatTimer);
-                heartbeatTimer = null;
+            if (presenceTimer) {
+                window.clearInterval(presenceTimer);
+                presenceTimer = null;
             }
             void stompClient.deactivate();
         },
