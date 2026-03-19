@@ -62,7 +62,7 @@ export default function Chat({ onNavigate }: { onNavigate: (s: Screen) => void }
             <main className="flex-1 flex flex-col min-w-0 bg-white">
                 <ChatHeader
                     room={selectedRoom}
-                    onlineCount={selectedRoom ? ((onlineByRoom.get(selectedRoom.id)?.size ?? 0)) : 0}
+                    onlineCount={selectedRoom ? [...(onlineByRoom.get(selectedRoom.id) ?? [])].filter((id) => id !== myUserId).length : 0}
                     onToggleInfo={selectedRoom ? () => setIsInfoOpen((v) => !v) : undefined}
                 />
                 <MessageList

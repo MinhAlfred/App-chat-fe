@@ -70,9 +70,8 @@ function ConfirmDialog({ title, description, confirmLabel, danger, onConfirm, on
                         Cancel
                     </button>
                     <button
-                        className={`px-4 py-2 rounded-xl text-sm font-medium text-white transition-colors ${
-                            danger ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-600 hover:bg-blue-700'
-                        } disabled:opacity-50`}
+                        className={`px-4 py-2 rounded-xl text-sm font-medium text-white transition-colors ${danger ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-600 hover:bg-blue-700'
+                            } disabled:opacity-50`}
                         onClick={() => void handleConfirm()}
                         type="button"
                         disabled={loading}
@@ -231,13 +230,12 @@ function AddMembersModal({ room, existingUserIds, onAdded, onCancel }: AddMember
                         return (
                             <button
                                 key={u.id}
-                                className={`w-full flex items-center gap-3 p-2 rounded-xl transition-colors text-left ${
-                                    already
-                                        ? 'opacity-40 cursor-not-allowed'
-                                        : isSelected
-                                          ? 'bg-blue-50 ring-1 ring-blue-200'
-                                          : 'hover:bg-slate-50'
-                                }`}
+                                className={`w-full flex items-center gap-3 p-2 rounded-xl transition-colors text-left ${already
+                                    ? 'opacity-40 cursor-not-allowed'
+                                    : isSelected
+                                        ? 'bg-blue-50 ring-1 ring-blue-200'
+                                        : 'hover:bg-slate-50'
+                                    }`}
                                 onClick={() => !already && toggle(u.id)}
                                 type="button"
                                 disabled={already}
@@ -462,7 +460,7 @@ export default function RoomInfoPanel({
                         type="button"
                     >
                         <LogOut className="h-4 w-4" />
-                        Leave {isGroup ? 'Group' : 'Conversation'}
+                        {isGroup ? 'Leave Group' : 'Block'}
                     </button>
                     {isOwner && (
                         <button

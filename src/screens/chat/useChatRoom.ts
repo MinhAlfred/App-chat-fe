@@ -99,6 +99,9 @@ export const useChatRoom = (): UseChatRoomReturn => {
     const roomMembersRef = useRef<Map<string, Set<string>>>(new Map());
     // debounce timer for readConversation — batches rapid incoming messages into one API call
     const readDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // IDs of messages added optimistically by handleSendMessage/handleSendFile
+    // Used to skip duplicate add when the WS MESSAGE_SENT echo arrives before React commits the optimistic update
+    const optimisticMessageIdsRef = useRef<Set<string>>(new Set());
 
     const scheduleReadConversation = useCallback((roomId: string) => {
         if (readDebounceRef.current) clearTimeout(readDebounceRef.current);
@@ -289,6 +292,7 @@ export const useChatRoom = (): UseChatRoomReturn => {
         setErrorMessage('');
         try {
             const created = await sendTextMessage(selectedRoom.id, messageInput.trim(), replyTo?.id);
+            optimisticMessageIdsRef.current.add(created.id);
             setMessages((prev) => [...prev, created]);
             setMessageInput('');
             setReplyTo(null);
@@ -313,6 +317,7 @@ export const useChatRoom = (): UseChatRoomReturn => {
         setErrorMessage('');
         try {
             const created = await sendFileToConversation(selectedRoom.id, file, replyTo?.id);
+            optimisticMessageIdsRef.current.add(created.id);
             setMessages((prev) => [...prev, created]);
             setReplyTo(null);
             setRooms((prev) =>
@@ -391,9 +396,17 @@ export const useChatRoom = (): UseChatRoomReturn => {
                         setMessages((prev) => {
                             const idx = prev.findIndex((m) => m.id === message.id);
                             if (idx >= 0) {
+                                // Already present (optimistic add or dedup) — update in place
+                                optimisticMessageIdsRef.current.delete(message.id);
                                 const next = [...prev];
                                 next[idx] = message;
                                 return next;
+                            }
+                            // Not yet in state: add only if it wasn't added optimistically
+                            // (race: API setState not yet committed but ID already tracked)
+                            if (optimisticMessageIdsRef.current.has(message.id)) {
+                                optimisticMessageIdsRef.current.delete(message.id);
+                                return prev;
                             }
                             return [...prev, message];
                         });

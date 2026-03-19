@@ -61,7 +61,7 @@ export const getAllOnlineUserIds = async (): Promise<string[]> => {
 export const getAdminUsers = async (page = 0, size = 20): Promise<PageResponse<UserResponse>> => {
     const params = toQueryParams({ page, size });
     const response = await axiosClient.get<ApiResponse<PageResponse<UserResponse>>>(
-        `${USERS_BASE}/admin/users?${params.toString()}`,
+        `${USERS_BASE}?${params.toString()}`,
     );
 
     return unwrapApiData(response);
