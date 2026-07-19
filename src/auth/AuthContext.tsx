@@ -16,7 +16,7 @@ type AuthContextValue = {
     register: (payload: RegisterPayload) => Promise<void>;
     logout: () => Promise<void>;
 };
-
+ 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {

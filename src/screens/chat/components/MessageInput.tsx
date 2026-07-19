@@ -88,7 +88,7 @@ export default function MessageInput({ value, onChange, onSubmit, onFileUpload, 
                     type="submit"
                     disabled={disabled || !value.trim() || isSending}
                 >
-                    <Send className="h-4 w-4 ml-1" />
+                    <Send className="h-4 w-4" />
                 </button>
             </form>
         </footer>
